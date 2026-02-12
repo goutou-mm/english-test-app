@@ -86,7 +86,7 @@ export async function onRequest(context) {
             '学生姓名': studentName,
             '测试分数': score,
             '学习行为数据': JSON.stringify(behaviorData),
-            '提交时间': new Date().toISOString()
+            '提交时间': Date.now()
         };
         
         // 3. 更新记录
