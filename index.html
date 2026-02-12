@@ -65,6 +65,38 @@
             transition: width 0.3s ease;
         }
         
+        /* 针对成绩结果容器的优化 */
+.result-card {
+    background: white;
+    border-radius: 20px;
+    padding: 25px;
+    margin: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    /* 解决显示不全的关键：允许容器内部滚动 */
+    max-height: 80vh; 
+    overflow-y: auto;
+}
+
+/* 美化分数显示 */
+.score-circle {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 8px solid #f0f0f0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    background: #fff;
+}
+
+.score-number {
+    font-size: 36px;
+    font-weight: bold;
+    color: #7232dd;
+}
+        
         /* 题目卡片容器 */
         .question-container {
             flex: 1;
@@ -361,23 +393,12 @@
     <van-empty v-else description="试卷加载中..." image="search"></van-empty>
     
     <!-- 底部按钮 -->
-    <div class="button-container" v-if="questions.length > 0">
-        <button class="btn btn-prev" 
-                @click="prevQuestion" 
-                :disabled="currentIndex === 0">
-            ← 上一题
-        </button>
-        <button v-if="currentIndex < questions.length - 1" 
-                class="btn btn-next" 
-                @click="nextQuestion">
-            下一题 →
-        </button>
-        <button v-else 
-                class="btn btn-submit" 
-                @click="submitTest">
-            提交测验
-        </button>
-    </div>
+    <div class="action-footer">
+    <van-button v-if="currentIndex > 0" @click="prevQuestion" round block>上一题</van-button>
+    
+    <van-button v-if="currentIndex < questions.length - 1" @click="nextQuestion" type="primary" round block>下一题</van-button>
+    
+    <van-button v-if="currentIndex === questions.length - 1" @click="submitResults" type="danger" round block>提交测试</van-button>
 </div>
 
 <script>
