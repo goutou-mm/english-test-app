@@ -16,7 +16,7 @@
         body { 
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
             padding: 0;
         }
         .app-container { 
@@ -71,7 +71,7 @@
             overflow-y: auto;
             padding: 15px;
             display: flex;
-            align-items: flex-start; /* 顶部对齐，避免被进度条遮挡 */
+            align-items: flex-start;
             justify-content: center;
             padding-top: 10px;
         }
@@ -211,6 +211,7 @@
             font-weight: 600;
             color: #666;
             transition: all 0.3s;
+            flex-shrink: 0;
         }
         .option-item.selected .option-label {
             background: #667eea;
@@ -269,20 +270,20 @@
         @media (max-width: 768px) {
             .question-card {
                 padding: 20px;
-                margin-top: 0; /* 移除顶部margin */
+                margin-top: 0;
             }
             .question-text {
                 font-size: 16px;
             }
             .question-container {
-                padding: 10px; /* 移动端减少padding */
+                padding: 10px;
                 padding-top: 5px;
             }
             .progress-header {
-                padding: 12px 15px; /* 移动端缩小进度条高度 */
+                padding: 12px 15px;
             }
             .question-type {
-                font-size: 13px; /* 移动端稍小字体 */
+                font-size: 13px;
                 padding: 6px 15px;
             }
         }
@@ -308,12 +309,12 @@
         <div class="question-card">
             <!-- 题目类型标签 -->
             <div class="question-type">
-                {{ currentQuestion.typeLabel }}
+                {{ getTypeLabel(currentQuestion) }}
             </div>
             
             <!-- 题目说明 -->
             <div class="question-instruction">
-                {{ currentQuestion.instruction }}
+                {{ getInstruction(currentQuestion) }}
             </div>
             
             <!-- 听力播放器 -->
@@ -385,18 +386,14 @@
             return { 
                 questions: [],
                 userAnswers: [],
-                currentIndex: 0,           // 当前题目索引
-                debugMode: false,
-                debugInfo: '',
+                currentIndex: 0,
                 
-                // 学习行为数据追踪
                 testStartTime: null,
                 totalTime: 0,
                 timerInterval: null,
                 questionMetrics: [],
                 currentPlayingIndex: null,
                 
-                // 防刷分
                 hasSubmitted: false,
                 submissionLocked: false
             }; 
@@ -422,6 +419,36 @@
             window.speechSynthesis.cancel();
         },
         methods: {
+            // 获取题型标签（处理缺失的情况）
+            getTypeLabel(question) {
+                if (question.typeLabel) {
+                    return question.typeLabel;
+                }
+                // 根据题目类型推断
+                if (question.audio_text) return '🎧 听力理解 Listening';
+                if (question.passage) return '📖 阅读理解 Reading';
+                if (question.options && question.options.length === 2) return '✅ 判断题 True or False';
+                if (question.questionType === '词汇') return '📚 词汇题 Vocabulary';
+                if (question.questionType === '语法') return '✏️ 语法填空 Grammar';
+                if (question.questionType === '短句') return '📝 短句理解 Sentence';
+                return '📝 选择题 Question';
+            },
+            
+            // 获取操作说明（处理缺失的情况）
+            getInstruction(question) {
+                if (question.instruction) {
+                    return question.instruction;
+                }
+                // 根据题目类型推断
+                if (question.audio_text) return '仔细听音频，然后选择正确答案。可以重复播放。';
+                if (question.passage) return '仔细阅读短文，然后回答问题。';
+                if (question.options && question.options.length === 2) return '判断下面的句子是对(True)还是错(False)。';
+                if (question.questionType === '词汇') return '选择正确的单词或词义。';
+                if (question.questionType === '语法') return '选择正确的单词填入空格。';
+                if (question.questionType === '短句') return '读句子，选择正确的中文意思或答案。';
+                return '请选择正确的答案。';
+            },
+            
             async loadQuestions() {
                 const urlParams = new URLSearchParams(window.location.search);
                 const recordId = urlParams.get('rid');
@@ -432,15 +459,12 @@
                 }
                 
                 try {
-                    // 显示加载提示
                     vant.Toast.loading({
                         message: '加载题目中...',
                         forbidClick: true,
                         duration: 0
                     });
                     
-                    // ===== 从API读取题目数据 =====
-                    // TODO: 替换为你部署的Vercel地址
                     const apiUrl = '/api/get-test-data';
                     const response = await fetch(`${apiUrl}?rid=${recordId}`);
                     
@@ -456,20 +480,14 @@
                         throw new Error(result.error || '数据加载失败');
                     }
                     
-                    // 提取数据
                     const { studentName, questions } = result.data;
                     
                     if (questions && questions.length > 0) {
                         this.questions = questions;
                         this.userAnswers = new Array(this.questions.length).fill('');
                         this.initQuestionMetrics();
-                        
-                        // 开始第一题计时
                         this.questionMetrics[0].startTime = Date.now();
-                        
-                        // 存储学生姓名（用于后续提交）
                         sessionStorage.setItem('studentName', studentName);
-                        
                         vant.Toast.success('题目加载成功');
                     } else {
                         throw new Error('题目数据为空');
@@ -478,70 +496,23 @@
                 } catch (error) { 
                     console.error('题目加载错误:', error);
                     vant.Toast.clear();
-                    
-                    // 如果API失败，降级到URL参数方式（兼容旧链接）
-                    this.loadQuestionsFromUrl();
-                }
-            },
-            
-            /**
-             * 备用方案：从URL参数读取（兼容旧链接）
-             */
-            loadQuestionsFromUrl() {
-                const urlParams = new URLSearchParams(window.location.search);
-                const rawData = urlParams.get('data');
-                
-                if (!rawData) {
-                    vant.Toast.fail("未找到题目数据");
-                    return;
-                }
-                
-                try {
-                    let text = decodeURIComponent(rawData);
-                    let parsed = JSON.parse(text);
-                    let questionsArray = null;
-                    
-                    if (parsed.output && parsed.output.choices && parsed.output.choices[0]) {
-                        const content = parsed.output.choices[0].message.content;
-                        questionsArray = JSON.parse(content);
-                    } else if (Array.isArray(parsed)) {
-                        questionsArray = parsed;
-                    } else if (parsed.questions) {
-                        questionsArray = parsed.questions;
-                    } else {
-                        const match = text.match(/\[\s*\{.*\}\s*\]/s);
-                        if (match) questionsArray = JSON.parse(match[0]);
-                    }
-                    
-                    if (questionsArray && questionsArray.length > 0) {
-                        this.questions = questionsArray;
-                        this.userAnswers = new Array(this.questions.length).fill('');
-                        this.initQuestionMetrics();
-                        this.questionMetrics[0].startTime = Date.now();
-                    } else {
-                        throw new Error('题目数组为空');
-                    }
-                } catch (e) { 
-                    console.error('题目解析错误:', e);
-                    vant.Toast.fail("题目加载失败"); 
+                    vant.Toast.fail('题目加载失败: ' + error.message);
                 }
             },
             
             initQuestionMetrics() {
-                this.questionMetrics = this.questions.map((q, index) => {
-                    return {
-                        questionIndex: index + 1,
-                        startTime: null,
-                        timeSpent: 0,
-                        isCorrect: false,
-                        userAnswer: '',
-                        correctAnswer: q.answer,
-                        changeCount: 0,
-                        audioPlayCount: 0,
-                        questionType: q.questionType || '其他',
-                        questionText: q.question || q.audio_text || ''
-                    };
-                });
+                this.questionMetrics = this.questions.map((q, index) => ({
+                    questionIndex: index + 1,
+                    startTime: null,
+                    timeSpent: 0,
+                    isCorrect: false,
+                    userAnswer: '',
+                    correctAnswer: q.answer,
+                    changeCount: 0,
+                    audioPlayCount: 0,
+                    questionType: q.questionType || '其他',
+                    questionText: q.question || q.audio_text || ''
+                }));
             },
             
             startTimer() {
@@ -562,7 +533,6 @@
                 
                 const metric = this.questionMetrics[this.currentIndex];
                 
-                // 记录修改次数
                 if (metric.userAnswer && metric.userAnswer !== option) {
                     metric.changeCount++;
                 }
@@ -572,19 +542,16 @@
             },
             
             nextQuestion() {
-                // 记录当前题用时
                 this.recordQuestionTime(this.currentIndex);
                 
                 if (this.currentIndex < this.questions.length - 1) {
                     this.currentIndex++;
                     
-                    // 开始新题计时
                     const metric = this.questionMetrics[this.currentIndex];
                     if (!metric.startTime) {
                         metric.startTime = Date.now();
                     }
                     
-                    // 停止音频
                     this.stopAudio();
                 }
             },
@@ -679,7 +646,6 @@
                     return;
                 }
                 
-                // 记录最后一题的用时
                 this.recordQuestionTime(this.currentIndex);
                 
                 const unanswered = this.userAnswers.filter(ans => !ans).length;
@@ -697,126 +663,166 @@
             },
             
             calculateAndSubmit() {
-    let correct = 0;
-    const wrongQuestions = [];
-    
-    this.questions.forEach((q, i) => {
-        const userAnswer = (this.userAnswers[i] || "").trim();
-        const correctAnswer = q.answer.trim();
-        const isCorrect = userAnswer === correctAnswer || userAnswer.startsWith(correctAnswer);
-        
-        if (isCorrect) {
-            correct++;
-        } else {
-            wrongQuestions.push(i + 1);
-        }
-        
-        this.questionMetrics[i].isCorrect = isCorrect;
-        this.questionMetrics[i].userAnswer = userAnswer;
-    });
-    
-    const score = Math.round((correct / this.questions.length) * 100);
-    const behaviorReport = this.generateBehaviorReport(score, correct, wrongQuestions);
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    const studentId = urlParams.get('rid') || '';
-    const studentName = sessionStorage.getItem('studentName') || '未知学生';
-    
-    if (studentId) {
-        localStorage.setItem(`test_submitted_${studentId}`, 'true');
-        localStorage.setItem(`test_submit_time_${studentId}`, new Date().toISOString());
-        localStorage.setItem(`test_submit_score_${studentId}`, score.toString());
-    }
-    
-    this.hasSubmitted = true;
-    this.submissionLocked = true;
-    
-    // 调用API提交
-    this.submitToAPI(studentId, studentName, score, behaviorReport, correct);
-},
-
-// 新增方法
-async submitToAPI(recordId, studentName, score, behaviorData, correctCount) {
-    try {
-        vant.Toast.loading({
-            message: '正在提交...',
-            forbidClick: true,
-            duration: 0
-        });
-        
-        const response = await fetch('/api/submit-test', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                recordId: recordId,
-                studentName: studentName,
-                score: score,
-                behaviorData: behaviorData
-            })
-        });
-        
-        const result = await response.json();
-        vant.Toast.clear();
-        
-        if (result.success) {
-            // 提交成功，显示漂亮的结果页
-            vant.Dialog.alert({
-                title: '🎉 测试完成',
-                message: `
-                    <div style="text-align: center; padding: 20px;">
-                        <div style="font-size: 48px; color: #667eea; margin-bottom: 10px;">
-                            ${score}分
-                        </div>
-                        <div style="font-size: 16px; color: #666; margin-bottom: 20px;">
-                            答对 ${correctCount} / ${this.questions.length} 题
-                        </div>
-                        <div style="background: #f0f3ff; padding: 15px; border-radius: 10px; margin-top: 20px;">
-                            <div style="font-size: 14px; color: #666; margin-bottom: 5px;">用时</div>
-                            <div style="font-size: 18px; color: #667eea; font-weight: bold;">
-                                ${this.formatTime(this.totalTime)}
-                            </div>
-                        </div>
-                        <div style="margin-top: 20px; font-size: 14px; color: #999;">
-                            ✓ 成绩已自动保存
-                        </div>
-                    </div>
-                `,
-                allowHtml: true,
-                confirmButtonText: '完成',
-                closeOnClickOverlay: false
-            });
-        } else {
-            throw new Error(result.error || '提交失败');
-        }
-        
-    } catch (error) {
-        console.error('提交错误:', error);
-        vant.Toast.clear();
-        
-        // 失败时提供备用方案
-        vant.Dialog.confirm({
-            title: '提交失败',
-            message: `自动提交失败，是否跳转到表单手动提交？\n\n错误：${error.message}`,
-            confirmButtonText: '去提交',
-            cancelButtonText: '取消'
-        }).then(() => {
-            // 跳转到原来的飞书表单
-            const behaviorDataJson = JSON.stringify(behaviorData);
-            const submitUrl = `https://ycn7fuexi0uc.feishu.cn/share/base/form/shrcndu6DXhs0BJqVoFvkkndKHe?` + 
-                `prefill_学生姓名=${encodeURIComponent(studentName)}` +
-                `&prefill_测试分数=${score}` +
-                `&prefill_学生ID=${recordId}` +
-                `&prefill_学习行为数据=${encodeURIComponent(behaviorDataJson)}`;
+                let correct = 0;
+                const wrongQuestions = [];
+                
+                this.questions.forEach((q, i) => {
+                    const userAnswer = (this.userAnswers[i] || "").trim();
+                    const correctAnswer = q.answer.trim();
+                    
+                    const isCorrect = userAnswer === correctAnswer || userAnswer.startsWith(correctAnswer);
+                    
+                    if (isCorrect) {
+                        correct++;
+                    } else {
+                        wrongQuestions.push(i + 1);
+                    }
+                    
+                    this.questionMetrics[i].isCorrect = isCorrect;
+                    this.questionMetrics[i].userAnswer = userAnswer;
+                });
+                
+                const score = Math.round((correct / this.questions.length) * 100);
+                const behaviorReport = this.generateBehaviorReport(score, correct, wrongQuestions);
+                
+                const urlParams = new URLSearchParams(window.location.search);
+                const studentId = urlParams.get('rid') || '';
+                const studentName = sessionStorage.getItem('studentName') || '未知学生';
+                
+                if (studentId) {
+                    localStorage.setItem(`test_submitted_${studentId}`, 'true');
+                    localStorage.setItem(`test_submit_time_${studentId}`, new Date().toISOString());
+                    localStorage.setItem(`test_submit_score_${studentId}`, score.toString());
+                }
+                
+                this.hasSubmitted = true;
+                this.submissionLocked = true;
+                
+                // 调用API自动提交
+                this.submitToAPI(studentId, studentName, score, behaviorReport, correct);
+            },
             
-            const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
-            if (isWeChat) {
-                window.open(submitUrl, '_blank');
-            } else {
-                window.location.href = submitUrl;
+            // 自动提交到飞书API
+            async submitToAPI(recordId, studentName, score, behaviorData, correctCount) {
+                try {
+                    vant.Toast.loading({
+                        message: '正在提交成绩...',
+                        forbidClick: true,
+                        duration: 0
+                    });
+                    
+                    const response = await fetch('/api/submit-test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            recordId: recordId,
+                            studentName: studentName,
+                            score: score,
+                            behaviorData: behaviorData
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    vant.Toast.clear();
+                    
+                    if (result.success) {
+                        // 提交成功，显示成绩
+                        vant.Dialog.alert({
+                            title: '🎉 测试完成',
+                            message: `
+                                <div style="text-align: center; padding: 20px;">
+                                    <div style="font-size: 48px; color: #667eea; margin-bottom: 10px; font-weight: bold;">
+                                        ${score}分
+                                    </div>
+                                    <div style="font-size: 16px; color: #666; margin-bottom: 20px;">
+                                        答对 ${correctCount} / ${this.questions.length} 题
+                                    </div>
+                                    <div style="background: #f0f3ff; padding: 15px; border-radius: 10px; margin-top: 20px;">
+                                        <div style="font-size: 14px; color: #666; margin-bottom: 5px;">用时</div>
+                                        <div style="font-size: 18px; color: #667eea; font-weight: bold;">
+                                            ${this.formatTime(this.totalTime)}
+                                        </div>
+                                    </div>
+                                    <div style="margin-top: 20px; font-size: 14px; color: #999;">
+                                        ✓ 成绩已自动保存
+                                    </div>
+                                </div>
+                            `,
+                            allowHtml: true,
+                            confirmButtonText: '完成',
+                            closeOnClickOverlay: false
+                        });
+                    } else {
+                        throw new Error(result.error || '提交失败');
+                    }
+                    
+                } catch (error) {
+                    console.error('提交错误:', error);
+                    vant.Toast.clear();
+                    
+                    // 失败时显示错误
+                    vant.Dialog.alert({
+                        title: '提交失败',
+                        message: `自动提交失败，但成绩已保存在本地。\n\n错误：${error.message}\n\n请联系老师记录成绩。`,
+                        confirmButtonText: '知道了'
+                    });
+                }
+            },
+            
+            generateBehaviorReport(score, correctCount, wrongQuestions) {
+                const typeStats = {};
+                this.questionMetrics.forEach(metric => {
+                    if (!typeStats[metric.questionType]) {
+                        typeStats[metric.questionType] = {
+                            total: 0,
+                            correct: 0,
+                            avgTime: 0,
+                            totalTime: 0
+                        };
+                    }
+                    typeStats[metric.questionType].total++;
+                    if (metric.isCorrect) {
+                        typeStats[metric.questionType].correct++;
+                    }
+                    typeStats[metric.questionType].totalTime += metric.timeSpent;
+                });
+                
+                Object.keys(typeStats).forEach(type => {
+                    typeStats[type].avgTime = Math.round(typeStats[type].totalTime / typeStats[type].total);
+                    typeStats[type].accuracy = Math.round((typeStats[type].correct / typeStats[type].total) * 100);
+                });
+                
+                const sortedByTime = [...this.questionMetrics].sort((a, b) => b.timeSpent - a.timeSpent);
+                
+                return {
+                    score: score,
+                    correctCount: correctCount,
+                    totalQuestions: this.questions.length,
+                    totalTime: this.totalTime,
+                    avgTimePerQuestion: Math.round(this.totalTime / this.questions.length),
+                    wrongQuestions: wrongQuestions,
+                    wrongCount: wrongQuestions.length,
+                    questionDetails: this.questionMetrics.map(m => ({
+                        questionIndex: m.questionIndex,
+                        questionType: m.questionType,
+                        isCorrect: m.isCorrect,
+                        timeSpent: Math.round(m.timeSpent),
+                        userAnswer: m.userAnswer,
+                        correctAnswer: m.correctAnswer,
+                        changeCount: m.changeCount,
+                        audioPlayCount: m.audioPlayCount
+                    })),
+                    typeStatistics: typeStats,
+                    patterns: {
+                        fastestQuestion: sortedByTime[sortedByTime.length - 1]?.questionIndex || 0,
+                        slowestQuestion: sortedByTime[0]?.questionIndex || 0,
+                        totalChanges: this.questionMetrics.reduce((sum, m) => sum + m.changeCount, 0),
+                        totalAudioPlays: this.questionMetrics.reduce((sum, m) => sum + m.audioPlayCount, 0)
+                    },
+                    submittedAt: new Date().toISOString()
+                };
             }
-        }).catch(() => {});
-    }
-}
+        }
     }).use(vant).mount('#app');
 </script>
 </body>
