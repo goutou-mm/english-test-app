@@ -23,7 +23,6 @@
             flex-direction: column;
         }
         
-        /* 顶部进度条 */
         .progress-header {
             background: white;
             padding: 15px 20px;
@@ -62,7 +61,6 @@
             transition: width 0.3s ease;
         }
         
-        /* 题目卡片容器 */
         .question-container {
             flex: 1;
             overflow-y: auto;
@@ -73,7 +71,6 @@
             padding-top: 10px;
         }
         
-        /* 题目卡片 */
         .question-card {
             background: white;
             border-radius: 20px;
@@ -89,7 +86,6 @@
             to { opacity: 1; transform: translateX(0); }
         }
         
-        /* 题目类型标签 */
         .question-type {
             display: inline-block;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -101,7 +97,6 @@
             font-weight: 500;
         }
         
-        /* 题目说明 */
         .question-instruction {
             background: #f8f9fa;
             padding: 12px 15px;
@@ -112,7 +107,6 @@
             border-left: 3px solid #667eea;
         }
         
-        /* 听力播放按钮 */
         .audio-player {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 15px;
@@ -145,7 +139,6 @@
             margin-top: 5px;
         }
         
-        /* 阅读材料 */
         .reading-passage {
             background: #f8f9fa;
             padding: 20px;
@@ -156,7 +149,6 @@
             font-size: 15px;
         }
         
-        /* 题目文本 */
         .question-text {
             font-size: 18px;
             font-weight: 600;
@@ -165,7 +157,6 @@
             line-height: 1.6;
         }
         
-        /* 选项样式 */
         .options-container {
             margin-bottom: 30px;
         }
@@ -216,7 +207,6 @@
             word-break: break-word;
         }
         
-        /* 底部按钮 */
         .button-container {
             padding: 20px;
             background: white;
@@ -255,71 +245,11 @@
             color: white;
         }
         
-        /* ===== 成绩弹窗样式优化 ===== */
-        .result-popup {
-            padding: 10px 0;
-            text-align: center;
-            max-width: 100%;
-            overflow: hidden;
-        }
-        .score-box {
-            margin: 20px 0;
-        }
-        .score-num {
-            font-size: 56px;
-            font-weight: bold;
-            color: #667eea;
-            line-height: 1;
-        }
-        .score-unit {
-            font-size: 24px;
-            color: #667eea;
-            margin-left: 5px;
-        }
-        .correct-count {
-            font-size: 15px;
-            color: #666;
-            margin: 15px 0;
-            line-height: 1.6;
-        }
-        .info-card {
-            background: #f0f3ff;
-            border-radius: 12px;
-            padding: 20px 15px;
-            margin: 20px 0;
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-        }
-        .info-item {
-            flex: 1;
-            text-align: center;
-        }
-        .info-label {
-            display: block;
-            font-size: 13px;
-            color: #999;
-            margin-bottom: 8px;
-        }
-        .info-value {
-            display: block;
-            font-size: 20px;
-            font-weight: bold;
-            color: #667eea;
-        }
-        .divider {
-            width: 1px;
-            height: 40px;
-            background: #ddd;
-            margin: 0 10px;
-        }
-        .save-note {
-            font-size: 13px;
-            color: #999;
-            margin-top: 15px;
+        /* ===== 简化版成绩弹窗 ===== */
+        .van-dialog__message {
+            padding: 20px 15px !important;
         }
         
-        /* 响应式 */
         @media (max-width: 768px) {
             .question-card {
                 padding: 20px;
@@ -337,12 +267,6 @@
             .question-type {
                 font-size: 13px;
                 padding: 6px 15px;
-            }
-            .score-num {
-                font-size: 48px;
-            }
-            .info-value {
-                font-size: 18px;
             }
         }
     </style>
@@ -424,7 +348,6 @@ const app = Vue.createApp({
         }
     },
     created() {
-        // 检测微信环境
         this.isWeChatBrowser = /MicroMessenger/i.test(navigator.userAgent);
         this.loadQuestions();
         this.checkSubmissionStatus();
@@ -577,7 +500,6 @@ const app = Vue.createApp({
         playAudio(text, index) {
             this.questionMetrics[index].audioPlayCount++;
             
-            // 微信环境特殊处理
             if (this.isWeChatBrowser) {
                 this.playAudioInWeChat(text, index);
             } else {
@@ -585,7 +507,6 @@ const app = Vue.createApp({
             }
         },
         
-        // 标准浏览器音频播放
         playAudioNormal(text, index) {
             window.speechSynthesis.cancel();
             
@@ -607,15 +528,10 @@ const app = Vue.createApp({
             window.speechSynthesis.speak(utterance);
         },
         
-        // 微信环境音频播放（添加用户交互确认）
         playAudioInWeChat(text, index) {
-            // 微信环境需要用户交互才能播放
             window.speechSynthesis.cancel();
-            
-            // 先设置播放状态
             this.currentPlayingIndex = index;
             
-            // 尝试播放
             try {
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'en-US';
@@ -633,12 +549,9 @@ const app = Vue.createApp({
                 utterance.onerror = (event) => {
                     console.error('播放错误:', event);
                     this.currentPlayingIndex = null;
-                    
-                    // 微信环境播放失败，提示用户
                     vant.Toast.fail('微信环境音频播放受限，建议在浏览器中打开');
                 };
                 
-                // 微信环境需要用户点击后立即播放
                 setTimeout(() => {
                     window.speechSynthesis.speak(utterance);
                 }, 100);
@@ -769,35 +682,10 @@ const app = Vue.createApp({
                 vant.Toast.clear();
                 
                 if (result.success) {
-                    const accuracy = ((correctCount / this.questions.length) * 100).toFixed(1);
-                    
-                    // ===== 优化后的弹窗 - 防止换行和溢出 =====
+                    // ===== 极简版弹窗 - 内容更少 =====
                     vant.Dialog.alert({
                         title: '🎉 测评完成',
-                        allowHtml: true,
-                        className: 'custom-result-dialog',
-                        message: `
-                            <div class="result-popup">
-                                <div class="score-box">
-                                    <span class="score-num">${score}</span><span class="score-unit">分</span>
-                                </div>
-                                <div class="correct-count">
-                                    本次答对 <strong style="color:#667eea;">${correctCount}</strong> 题 / 共 <strong style="color:#667eea;">${this.questions.length}</strong> 题
-                                </div>
-                                <div class="info-card">
-                                    <div class="info-item">
-                                        <span class="info-label">总用时</span>
-                                        <span class="info-value">${this.formatTime(this.totalTime)}</span>
-                                    </div>
-                                    <div class="divider"></div>
-                                    <div class="info-item">
-                                        <span class="info-label">正确率</span>
-                                        <span class="info-value">${accuracy}%</span>
-                                    </div>
-                                </div>
-                                <div class="save-note">✓ 成绩已自动保存</div>
-                            </div>
-                        `,
+                        message: `得分：${score}分\n\n答对 ${correctCount}/${this.questions.length} 题\n\n用时：${this.formatTime(this.totalTime)}\n\n✓ 成绩已自动保存`,
                         confirmButtonText: '完成',
                         closeOnClickOverlay: false
                     });
