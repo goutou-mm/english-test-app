@@ -1,5 +1,5 @@
 {
-  "name": "english-test",
+  "name": "english-test-app",
   "compatibility_date": "2026-02-09",
   "assets": {
     "directory": "./"  // 告诉 Cloudflare 网页就在根目录
