@@ -36,6 +36,84 @@ async function safeFetch(url, options, stepName) {
     }
 }
 
+// ===== 新增：解析题目的智能函数 =====
+function parseQuestions(questionsJson) {
+    console.log('开始解析题目，原始数据类型:', typeof questionsJson);
+    
+    let questions = null;
+    
+    try {
+        // 1. 如果已经是对象，转成字符串
+        const rawStr = typeof questionsJson === 'string' ? questionsJson : JSON.stringify(questionsJson);
+        
+        console.log('原始字符串长度:', rawStr.length);
+        console.log('原始字符串前100字符:', rawStr.substring(0, 100));
+        
+        // 2. 尝试解析整个字符串
+        let parsedData = JSON.parse(rawStr);
+        
+        // 3. 检查是否有 output.choices 结构（旧格式）
+        if (parsedData.output?.choices?.[0]?.message?.content) {
+            console.log('检测到旧格式（output.choices）');
+            const innerContent = parsedData.output.choices[0].message.content.trim();
+            questions = extractJsonArray(innerContent);
+        }
+        // 4. 检查是否有 choices 结构（新格式）
+        else if (parsedData.choices?.[0]?.message?.content) {
+            console.log('检测到新格式（choices）');
+            const innerContent = parsedData.choices[0].message.content.trim();
+            questions = extractJsonArray(innerContent);
+        }
+        // 5. 直接就是数组
+        else if (Array.isArray(parsedData)) {
+            console.log('检测到直接数组格式');
+            questions = parsedData;
+        }
+        // 6. 尝试提取JSON数组
+        else {
+            console.log('未知格式，尝试提取JSON数组');
+            questions = extractJsonArray(rawStr);
+        }
+        
+        // 7. 验证结果
+        if (!Array.isArray(questions)) {
+            throw new Error('解析结果不是数组');
+        }
+        
+        if (questions.length === 0) {
+            throw new Error('题目数组为空');
+        }
+        
+        console.log('题目解析成功，数量:', questions.length);
+        return questions;
+        
+    } catch (e) {
+        console.error('解析失败:', e);
+        console.error('失败时的数据:', String(questionsJson).substring(0, 500));
+        throw new Error(`题目解析失败: ${e.message}`);
+    }
+}
+
+// ===== 新增：从字符串中提取JSON数组 =====
+function extractJsonArray(str) {
+    // 1. 移除 Markdown 代码块标记
+    let cleaned = str.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+    
+    console.log('移除Markdown后长度:', cleaned.length);
+    
+    // 2. 尝试匹配 JSON 数组
+    const arrayMatch = cleaned.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    
+    if (arrayMatch) {
+        console.log('找到JSON数组，开始解析');
+        return JSON.parse(arrayMatch[0]);
+    }
+    
+    // 3. 如果没有匹配到，直接解析
+    console.log('未匹配到数组格式，尝试直接解析');
+    return JSON.parse(cleaned);
+}
+
 // Cloudflare Pages Functions 导出格式
 export async function onRequest(context) {
     const { request } = context;
@@ -109,43 +187,13 @@ export async function onRequest(context) {
         }
         console.log('记录获取成功，学生:', record.fields['学生姓名']);
         
-        // 3. 解析题目
+        // 3. 解析题目（使用新的解析函数）
         let questionsJson = record.fields['AI出题结果'];
         if (!questionsJson) {
             throw new Error('AI出题结果字段为空');
         }
         
-        console.log('开始解析题目，原始数据长度:', String(questionsJson).length);
-        
-        let questions = null;
-        try {
-            const rawStr = typeof questionsJson === 'string' ? questionsJson : JSON.stringify(questionsJson);
-            const parsedRaw = JSON.parse(rawStr);
-            
-            let innerContent = "";
-            if (parsedRaw.output?.choices?.[0]?.message?.content) {
-                innerContent = parsedRaw.output.choices[0].message.content.trim();
-            } else {
-                innerContent = rawStr.trim();
-            }
-            
-            const match = innerContent.match(/\[\s*\{[\s\S]*\}\s*\]/);
-            if (match) {
-                questions = JSON.parse(match[0]);
-            } else {
-                questions = JSON.parse(innerContent);
-            }
-            
-            if (!Array.isArray(questions)) {
-                throw new Error('解析结果不是数组');
-            }
-            
-            console.log('题目解析成功，数量:', questions.length);
-            
-        } catch (e) {
-            console.error('解析失败:', e);
-            throw new Error(`题目解析失败: ${e.message}`);
-        }
+        const questions = parseQuestions(questionsJson);
         
         // 4. 返回成功
         return new Response(JSON.stringify({
